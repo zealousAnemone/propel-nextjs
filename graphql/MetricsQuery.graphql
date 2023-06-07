@@ -1,8 +1,12 @@
-query Metrics {
-  metrics {
-    nodes {
-      id
-      uniqueName
+query MetricReport($input: MetricReportInput!) {
+  metricReport(input: $input) {
+    pageInfo {
+      startCursor
+      endCursor
+      hasNextPage
+      hasPreviousPage
     }
+    headers
+    rows
   }
 }

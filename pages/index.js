@@ -1,16 +1,10 @@
 import React from 'react'
-import router from 'next/router'
 import Head from 'next/head'
-import Link from 'next/link'
 import { ClientCredentials } from 'simple-oauth2'
-import { GraphQLClient, gql } from 'graphql-request'
-import InputLabel from '@mui/material/InputLabel'
-import MenuItem from '@mui/material/MenuItem'
-import FormControl from '@mui/material/FormControl'
-import Select from '@mui/material/Select'
-
-import { Layout, Card } from '../components'
+import { GraphQLClient } from 'graphql-request'
+import { Button, ButtonGroup } from '@chakra-ui/react'
 import { MetricsQuery } from '../graphql'
+import ReportTable from '../components/ReportTable'
 
 export async function getServerSideProps() {
   /**
@@ -18,8 +12,8 @@ export async function getServerSideProps() {
    */
   const config = {
     client: {
-      id: process.env.CLIENT_ID_SAMPLE_APP,
-      secret: process.env.CLIENT_SECRET_SAMPLE_APP
+      id: process.env.CLIENT_ID,
+      secret: process.env.CLIENT_SECRET
     },
     auth: {
       tokenHost: process.env.TOKEN_HOST,
@@ -53,7 +47,81 @@ const client = new GraphQLClient(
 
 export default function App({ accessToken }) {
   const [metrics, setMetrics] = React.useState()
-  const [selectedMetric, setSelectedMetric] = React.useState('')
+  const [columns, setColumns] = React.useState([])
+  const [rows, setRows] = React.useState([])
+  const [end, setEnd] = React.useState()
+  const [start, setStart] = React.useState()
+
+  const fetchData = React.useCallback(
+    async (query, variables) => {
+      try {
+        client.setHeader('authorization', 'Bearer ' + accessToken)
+        const data = await client.request(query, variables)
+        setMetrics(data)
+        console.log('Data: ', data)
+      } catch (error) {
+        console.log(error)
+      }
+    },
+    [accessToken]
+  )
+
+  const pageBack = () => {
+    const variables = {
+      input: {
+        timeRange: {
+          relative: 'PREVIOUS_MONTH'
+        },
+        metrics: [
+          {
+            uniqueName: 'revenue'
+          }
+        ],
+        dimensions: [
+          {
+            columnName: 'PRODUCT_NAME',
+            displayName: 'Product name'
+          },
+          {
+            columnName: 'PRODUCT_CATEGORY',
+            displayName: 'Product category'
+          }
+        ],
+        last: 10,
+        before: start
+      }
+    }
+    fetchData(MetricsQuery, variables)
+  }
+
+  const pageForward = () => {
+    const variables = {
+      input: {
+        timeRange: {
+          relative: 'PREVIOUS_MONTH'
+        },
+        metrics: [
+          {
+            uniqueName: 'revenue'
+          }
+        ],
+        dimensions: [
+          {
+            columnName: 'PRODUCT_NAME',
+            displayName: 'Product name'
+          },
+          {
+            columnName: 'PRODUCT_CATEGORY',
+            displayName: 'Product category'
+          }
+        ],
+        first: 10,
+        after: end
+      }
+    }
+
+    fetchData(MetricsQuery, variables)
+  }
 
   React.useEffect(() => {
     if (accessToken) {
@@ -62,107 +130,91 @@ export default function App({ accessToken }) {
   }, [accessToken])
 
   React.useEffect(() => {
-    async function fetchData() {
-      try {
-        client.setHeader('authorization', 'Bearer ' + accessToken)
-        const { metrics } = await client.request(MetricsQuery)
-
-        setMetrics(metrics)
-      } catch (error) {}
+    const variables = {
+      input: {
+        timeRange: {
+          relative: 'PREVIOUS_MONTH'
+        },
+        metrics: [
+          {
+            uniqueName: 'revenue'
+          }
+        ],
+        dimensions: [
+          {
+            columnName: 'PRODUCT_NAME',
+            displayName: 'Product name'
+          },
+          {
+            columnName: 'PRODUCT_CATEGORY',
+            displayName: 'Product category'
+          }
+        ],
+        first: 10
+      }
     }
 
     if (accessToken) {
-      fetchData()
+      fetchData(MetricsQuery, variables)
     }
-  }, [accessToken])
+  }, [accessToken, fetchData])
 
-  const handleChange = (event) => {
-    setSelectedMetric(event.target.value)
-  }
+  React.useEffect(() => {
+    if (metrics) {
+      setEnd(metrics.metricReport.pageInfo.endCursor)
+      setStart(metrics.metricReport.pageInfo.startCursor)
 
-  const handleCardClick = (pageRef) => {
-    router.push(`/${pageRef}/${selectedMetric}`)
-  }
+      setColumns(
+        metrics.metricReport.headers.map((header) => ({
+          Header: header,
+          accessor: header.toLowerCase()
+        }))
+      )
+      let tempRows = []
+      metrics.metricReport.rows.forEach((row) => {
+        let innerObj = {}
+        row.forEach((innerRow, i) => {
+          let tempVal = innerRow
+          if (!isNaN(parseFloat(tempVal))) {
+            tempVal = `$${parseFloat(innerRow).toFixed(2)}`
+          }
+          innerObj[metrics.metricReport.headers[i].toLowerCase()] = tempVal
+        })
+        tempRows.push(innerObj)
+      })
+      setRows(tempRows)
+    }
+  }, [metrics])
 
   return (
     <>
       <Head>
-        <title>Propel Sample App</title>
-        <link rel="icon" href="/favicon.ico" />
+        <title>Report Dashboard</title>
       </Head>
-      <Layout appLink={<Link href="#">Docs</Link>}>
-        <h1>
-          Welcome to <a href="https://www.propeldata.com">Propel!</a>
-        </h1>
-        <p>How developers build data products.</p>
-        <div className="select-container">
-          {!metrics ? (
-            'Loading...'
-          ) : (
-            <FormControl fullWidth sx={{ textAlign: 'left' }}>
-              <InputLabel id="select-metric-label">Select a Metric</InputLabel>
-              <Select
-                labelId="select-metric-label"
-                label="Select a Metric"
-                id="demo-simple-select"
-                value={selectedMetric}
-                onChange={handleChange}
-              >
-                {metrics.nodes.map((metric) => (
-                  <MenuItem key={metric.id} value={metric.id}>
-                    {metric.uniqueName}
-                  </MenuItem>
-                ))}
-              </Select>
-            </FormControl>
-          )}
-        </div>
-
-        <div className="grid">
-          <Card
-            title="Time Series"
-            description="Build your first Time Series chart from your Metrics!"
-            pageRef="time-series"
-            onClick={handleCardClick}
-            disabled={!selectedMetric}
-          />
-          <Card
-            title="Counter"
-            description="Build your first Metric Counter visualization!"
-            pageRef="counter"
-            onClick={handleCardClick}
-            disabled={!selectedMetric}
-          />
-        </div>
-
-        <style jsx>{`
-          .grid {
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            flex-wrap: wrap;
-
-            max-width: 800px;
-            margin-top: 2rem;
-          }
-
-          .select-container {
-            margin-top: 2rem;
-            max-width: 300px;
-            height: 58.86px;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-          }
-
-          @media (max-width: 600px) {
-            .grid {
-              width: 100%;
-              flex-direction: column;
-            }
-          }
-        `}</style>
-      </Layout>
+      <h1>Report Dashboard</h1>
+      <div>
+        {columns && rows ? (
+          <>
+            <ReportTable columns={columns} rows={rows} />
+          </>
+        ) : (
+          Loading
+        )}
+        {metrics && (
+          <ButtonGroup spacing="6">
+            {metrics.metricReport.pageInfo.hasPreviousPage && (
+              <Button colorScheme="teal" onClick={pageBack}>
+                Previous page
+              </Button>
+            )}
+            {metrics.metricReport.pageInfo.hasNextPage && (
+              <Button colorScheme="teal" onClick={pageForward}>
+                Next page
+              </Button>
+            )}
+          </ButtonGroup>
+        )}
+      </div>
     </>
   )
 }
