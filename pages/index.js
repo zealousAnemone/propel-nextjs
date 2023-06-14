@@ -12,8 +12,8 @@ export async function getServerSideProps() {
    */
   const config = {
     client: {
-      id: process.env.CLIENT_ID,
-      secret: process.env.CLIENT_SECRET
+      id: process.env.CLIENT_ID_SAMPLE_APP,
+      secret: process.env.CLIENT_SECRET_SAMPLE_APP
     },
     auth: {
       tokenHost: process.env.TOKEN_HOST,
@@ -25,9 +25,6 @@ export async function getServerSideProps() {
    * Create the OAuth2 client
    */
   const oauth2Client = new ClientCredentials(config)
-  const tokenParams = {
-    scope: '<scope>'
-  }
 
   /**
    * Get a token using the client credentials
@@ -55,7 +52,7 @@ export default function App({ accessToken }) {
   const fetchData = React.useCallback(
     async (query, variables) => {
       try {
-        client.setHeader('authorization', 'Bearer ' + accessToken)
+        client.setHeader('Authorization', 'Bearer ' + accessToken)
         const data = await client.request(query, variables)
         setMetrics(data)
         console.log('Data: ', data)
